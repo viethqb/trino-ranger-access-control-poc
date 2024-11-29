@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="ranger-trino-plugin-3.0.0-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/trino/ranger-3.0.0-SNAPSHOT-trino-plugin/lib/ranger-trino-plugin-3.0.0-SNAPSHOT.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

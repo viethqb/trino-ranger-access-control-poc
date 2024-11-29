@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="nashorn-core-15.4">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/trino/ranger-3.0.0-SNAPSHOT-trino-plugin/lib/nashorn-core-15.4.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

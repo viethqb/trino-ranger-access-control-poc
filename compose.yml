@@ -1,0 +1,109 @@
+services:
+  postgres:
+    image: docker.io/bitnami/postgresql:16.3.0
+    container_name: postgres
+    environment:
+      - POSTGRESQL_PASSWORD=postgres123AA
+    volumes:
+      - ranger-postgres:/bitnami/postgresql:rw
+    networks:
+      - ranger
+    
+  opensearch:
+    image: opensearchproject/opensearch:${OPENSEARCH_VERSION:-2.15.0}
+    container_name: opensearch
+    environment:
+      discovery.type: single-node
+      node.name: opensearch
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      DISABLE_INSTALL_DEMO_CONFIG: true
+      DISABLE_SECURITY_PLUGIN: true
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - 9200:9200
+      - 9600:9600
+    networks:
+      - ranger
+
+  ranger:
+    image: viet1846/ranger-admin:2.5.0
+    container_name: ranger
+    depends_on:
+      - postgres
+      - opensearch
+    networks:
+      - ranger
+    ports:
+      - "6080:6080"
+    command:
+      - /home/ranger/scripts/ranger.sh
+    volumes:
+      - ./ranger/ranger-admin-install.properties:/opt/ranger/admin/install.properties:Z,ro
+  
+  trino:
+    image: viet1846/trino:466
+    container_name: trino
+    build:
+      context: ./trino
+      dockerfile: Dockerfile
+    ports:
+      - '9090:8080'
+    volumes:
+      - ./trino/configs/etc-trino:/etc/trino
+      - ./trino/install.properties:/tmp/ranger_plugin_config/install.properties
+      - ./trino/configs/ranger:/etc/ranger
+    networks: 
+      - ranger
+  rest:
+    image: tabulario/iceberg-rest
+    container_name: iceberg-rest
+    networks:
+      - ranger
+    ports:
+      - 8181:8181
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+  minio:
+    image: minio/minio
+    container_name: minio
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DOMAIN=minio
+    networks:
+      - ranger
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc
+    container_name: mc
+    networks:
+      - ranger
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc policy set public minio/warehouse;
+      tail -f /dev/null
+      "
+volumes:
+  ranger-postgres:
+  # ranger-elasticsearch:
+  opensearch-data:
+networks:
+  ranger:
