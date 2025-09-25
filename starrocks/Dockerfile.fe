@@ -1,0 +1,6 @@
+FROM starrocks/fe-ubuntu:3.5-latest
+
+RUN rm /opt/starrocks/fe/lib/ranger-plugins-common-2.5.0.jar
+RUN rm /opt/starrocks/fe/lib/ranger-plugins-audit-2.5.0.jar
+
+COPY ./trino/dist/*.jar /data/deploy/starrocks/fe/lib/

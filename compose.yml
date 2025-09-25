@@ -8,7 +8,58 @@ services:
       - ranger-postgres:/bitnami/postgresql:rw
     networks:
       - ranger
-    
+  starrocks-fe-0:
+    image: viet1846/starrocks-fe-ubuntu:3.5-latest
+    build:
+      context: .
+      dockerfile: ./starrocks/Dockerfile.fe
+    hostname: starrocks-fe-0
+    container_name: starrocks-fe-0
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/starrocks/fe_entrypoint.sh starrocks-fe-0
+    environment:
+      - HOST_TYPE=FQDN
+      - TZ=Asia/Shanghai
+    ports:
+      - "8030:8030"
+      - "9020:9020"
+      - "9030:9030"
+    volumes:
+       - singleton_fe0_data:/opt/starrocks/fe/meta
+       - ./starrocks/conf/ranger-starrocks-security.xml:/opt/starrocks/fe/conf/ranger-starrocks-security.xml
+       - ./starrocks/conf/ranger-policymgr-ssl.xml:/opt/starrocks/fe/conf/ranger-policymgr-ssl.xml
+       - ./starrocks/conf/ranger-starrocks-audit.xml:/opt/starrocks/fe/conf/ranger-starrocks-audit.xml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9030"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - ranger
+
+  starrocks-be-0:
+    image: starrocks/be-ubuntu:3.5-latest
+    hostname: starrocks-be-0
+    container_name: starrocks-be-0
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/starrocks/be_entrypoint.sh starrocks-fe-0
+    environment:
+      - HOST_TYPE=FQDN
+      - TZ=Asia/Shanghai
+    ports:
+      - "8040:8040"
+    depends_on:
+      - starrocks-fe-0
+    volumes:
+      - singleton_be0_data:/opt/starrocks/be/storage
+    networks:
+      - ranger
   opensearch:
     image: opensearchproject/opensearch:${OPENSEARCH_VERSION:-2.15.0}
     container_name: opensearch
@@ -105,5 +156,7 @@ volumes:
   ranger-postgres:
   # ranger-elasticsearch:
   opensearch-data:
+  singleton_fe0_data:
+  singleton_be0_data:
 networks:
   ranger:
