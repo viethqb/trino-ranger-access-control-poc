@@ -1,0 +1,466 @@
+{
+	"name": "Sync Ranger Policies - Trino to StarRocks",
+	"nodes": [
+		{
+			"parameters": {
+				"rule": {
+					"interval": [{ "field": "hours", "hoursInterval": 1 }]
+				}
+			},
+			"type": "n8n-nodes-base.scheduleTrigger",
+			"typeVersion": 1.2,
+			"position": [-600, 300],
+			"id": "a0000001-0000-0000-0000-000000000001",
+			"name": "Schedule Trigger"
+		},
+		{
+			"parameters": {
+				"assignments": {
+					"assignments": [
+						{
+							"id": "cfg-01",
+							"name": "rangerUrl",
+							"value": "http://localhost:6080",
+							"type": "string"
+						},
+						{
+							"id": "cfg-02",
+							"name": "rangerUser",
+							"value": "admin",
+							"type": "string"
+						},
+						{
+							"id": "cfg-03",
+							"name": "rangerPass",
+							"value": "rangerR0cks!",
+							"type": "string"
+						},
+						{
+							"id": "cfg-04",
+							"name": "trinoService",
+							"value": "trino",
+							"type": "string"
+						},
+						{
+							"id": "cfg-05",
+							"name": "starrrocksService",
+							"value": "starrocks",
+							"type": "string"
+						}
+					]
+				},
+				"options": {}
+			},
+			"type": "n8n-nodes-base.set",
+			"typeVersion": 3.4,
+			"position": [-380, 300],
+			"id": "a0000001-0000-0000-0000-000000000002",
+			"name": "Config"
+		},
+		{
+			"parameters": {
+				"method": "GET",
+				"url": "={{ $json.rangerUrl }}/service/public/v2/api/roles",
+				"authentication": "genericCredentialType",
+				"genericAuthType": "httpBasicAuth",
+				"options": {}
+			},
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [-100, 100],
+			"id": "a0000001-0000-0000-0000-000000000003",
+			"name": "Fetch Ranger Roles",
+			"credentials": {
+				"httpBasicAuth": {
+					"id": "RANGER_BASIC_AUTH",
+					"name": "Ranger Basic Auth"
+				}
+			}
+		},
+		{
+			"parameters": {
+				"jsCode": "// Transform roles: add stripped-domain users alongside originals\nconst roles = $input.all().map(item => item.json);\nconst results = [];\n\nfunction stripEmailDomain(username) {\n  return username.replace(/@ssi\\.com\\.vn$/, '');\n}\n\nfor (const role of roles) {\n  const roleName = role.name || '';\n  if (!roleName) continue;\n\n  const originalUsers = role.users || [];\n  const existingNames = new Set(originalUsers.map(u => u.name || ''));\n\n  const newUsers = [...originalUsers];\n  for (const u of originalUsers) {\n    const stripped = stripEmailDomain(u.name || '');\n    if (stripped !== (u.name || '') && !existingNames.has(stripped)) {\n      newUsers.push({ name: stripped, isAdmin: u.isAdmin || false });\n      existingNames.add(stripped);\n    }\n  }\n\n  if (newUsers.length === originalUsers.length) {\n    // No new users to add, skip\n    continue;\n  }\n\n  results.push({\n    json: {\n      ...role,\n      users: newUsers,\n      _roleId: role.id,\n      _roleName: roleName\n    }\n  });\n}\n\nif (results.length === 0) {\n  results.push({ json: { _noRolesToUpdate: true } });\n}\n\nreturn results;"
+			},
+			"type": "n8n-nodes-base.code",
+			"typeVersion": 2,
+			"position": [140, 100],
+			"id": "a0000001-0000-0000-0000-000000000004",
+			"name": "Transform Roles"
+		},
+		{
+			"parameters": {
+				"conditions": {
+					"options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+					"conditions": [
+						{
+							"id": "cond-role",
+							"leftValue": "={{ $json._noRolesToUpdate }}",
+							"rightValue": true,
+							"operator": { "type": "boolean", "operation": "notTrue" }
+						}
+					],
+					"combinator": "and"
+				}
+			},
+			"type": "n8n-nodes-base.if",
+			"typeVersion": 2.2,
+			"position": [380, 100],
+			"id": "a0000001-0000-0000-0000-000000000005",
+			"name": "Has Roles to Update?"
+		},
+		{
+			"parameters": {
+				"method": "PUT",
+				"url": "={{ $('Config').item.json.rangerUrl }}/service/public/v2/api/roles/{{ $json._roleId }}",
+				"authentication": "genericCredentialType",
+				"genericAuthType": "httpBasicAuth",
+				"sendBody": true,
+				"specifyBody": "json",
+				"jsonBody": "={{ JSON.stringify($json) }}",
+				"options": {}
+			},
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [620, 60],
+			"id": "a0000001-0000-0000-0000-000000000006",
+			"name": "Update Role",
+			"credentials": {
+				"httpBasicAuth": {
+					"id": "RANGER_BASIC_AUTH",
+					"name": "Ranger Basic Auth"
+				}
+			}
+		},
+		{
+			"parameters": {
+				"method": "GET",
+				"url": "={{ $json.rangerUrl }}/service/public/v2/api/service/{{ $json.trinoService }}/policy",
+				"authentication": "genericCredentialType",
+				"genericAuthType": "httpBasicAuth",
+				"options": {}
+			},
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [-100, 340],
+			"id": "a0000001-0000-0000-0000-000000000010",
+			"name": "Fetch Trino Policies",
+			"credentials": {
+				"httpBasicAuth": {
+					"id": "RANGER_BASIC_AUTH",
+					"name": "Ranger Basic Auth"
+				}
+			}
+		},
+		{
+			"parameters": {
+				"method": "GET",
+				"url": "={{ $json.rangerUrl }}/service/public/v2/api/service/{{ $json.starrrocksService }}/policy",
+				"authentication": "genericCredentialType",
+				"genericAuthType": "httpBasicAuth",
+				"options": {}
+			},
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [-100, 560],
+			"id": "a0000001-0000-0000-0000-000000000011",
+			"name": "Fetch StarRocks Policies",
+			"credentials": {
+				"httpBasicAuth": {
+					"id": "RANGER_BASIC_AUTH",
+					"name": "Ranger Basic Auth"
+				}
+			}
+		},
+		{
+			"parameters": {
+				"mode": "combine",
+				"combineBy": "combineAll",
+				"options": {}
+			},
+			"type": "n8n-nodes-base.merge",
+			"typeVersion": 3,
+			"position": [200, 440],
+			"id": "a0000001-0000-0000-0000-000000000012",
+			"name": "Merge Policies"
+		},
+		{
+			"parameters": {
+				"jsCode": "// Main transformation logic\n// Input 0: Trino policies array, Input 1: StarRocks policies array\nconst allItems = $input.all();\n\n// The merge node combines all items. We need to separate them.\n// Since we used 'combineAll', each item has data from both inputs.\n// Instead, let's use the first item which has all data merged.\n// Actually with Merge combineAll, we get cross-product. We need a different approach.\n// Let's use Code node to access both inputs via $('node').all()\n\nconst trinoPolicies = $('Fetch Trino Policies').all().map(i => i.json);\nconst starrocksPolicies = $('Fetch StarRocks Policies').all().map(i => i.json);\nconst config = $('Config').first().json;\n\n// Build index of existing StarRocks policies by name\nconst existingPolicies = {};\nfor (const p of starrocksPolicies) {\n  existingPolicies[p.name] = p;\n}\n\n// Helper functions\nfunction stripEmailDomain(username) {\n  return username.replace(/@ssi\\.com\\.vn$/, '');\n}\n\nfunction transformUsers(users) {\n  return users.map(u => stripEmailDomain(u));\n}\n\nfunction isIcebergPolicy(policy) {\n  const resources = policy.resources || {};\n  const catalogRes = resources.catalog || {};\n  const values = catalogRes.values || [];\n  return values.some(v => v.toLowerCase() === 'iceberg');\n}\n\nfunction hasCatalogResource(policy) {\n  return 'catalog' in (policy.resources || {});\n}\n\nfunction needsUsagePermission(resources) {\n  const keys = new Set(Object.keys(resources));\n  const catalogOnly = keys.size === 1 && keys.has('catalog');\n  const catalogSchema = keys.size === 2 && keys.has('catalog') && keys.has('schema');\n  const catalogDatabase = keys.size === 2 && keys.has('catalog') && keys.has('database');\n  return catalogOnly || catalogSchema || catalogDatabase;\n}\n\nfunction mapResources(resources) {\n  const RESOURCE_MAP = { schema: 'database' };\n  const mapped = {};\n  for (const [key, value] of Object.entries(resources)) {\n    const newKey = RESOURCE_MAP[key] || key;\n    mapped[newKey] = value;\n  }\n  return mapped;\n}\n\nfunction createBasePolicy(sourcePolicy) {\n  const name = `sync-trino: ${sourcePolicy.name}`;\n  return {\n    service: config.starrrocksService,\n    name: name,\n    policyType: sourcePolicy.policyType || 0,\n    isEnabled: sourcePolicy.isEnabled !== undefined ? sourcePolicy.isEnabled : true,\n    isAuditEnabled: sourcePolicy.isAuditEnabled !== undefined ? sourcePolicy.isAuditEnabled : true,\n    resources: mapResources(sourcePolicy.resources || {}),\n    description: `Synced from Trino policy: ${sourcePolicy.name} (id=${sourcePolicy.id})`,\n  };\n}\n\nfunction transformAccessPolicy(policy) {\n  const newPolicy = createBasePolicy(policy);\n  const addUsage = needsUsagePermission(policy.resources || {});\n  const newItems = [];\n\n  for (const item of (policy.policyItems || [])) {\n    const selectAccesses = (item.accesses || []).filter(a => a.type === 'select');\n    const useAccesses = (item.accesses || []).filter(a => a.type === 'use');\n    if (!selectAccesses.length && !useAccesses.length) continue;\n\n    const accesses = [];\n    if (selectAccesses.length) accesses.push({ type: 'select', isAllowed: true });\n    if (addUsage) accesses.push({ type: 'usage', isAllowed: true });\n\n    newItems.push({\n      accesses,\n      users: transformUsers(item.users || []),\n      groups: item.groups || [],\n      roles: item.roles || [],\n      conditions: item.conditions || [],\n      delegateAdmin: item.delegateAdmin || false,\n    });\n  }\n\n  if (!newItems.length) return null;\n  newPolicy.policyItems = newItems;\n  return newPolicy;\n}\n\nfunction transformMaskingPolicy(policy) {\n  const newPolicy = createBasePolicy(policy);\n  newPolicy.dataMaskPolicyItems = (policy.dataMaskPolicyItems || []).map(item => ({\n    accesses: item.accesses || [],\n    users: transformUsers(item.users || []),\n    groups: item.groups || [],\n    roles: item.roles || [],\n    conditions: item.conditions || [],\n    delegateAdmin: item.delegateAdmin || false,\n    dataMaskInfo: item.dataMaskInfo || {},\n  }));\n  return newPolicy;\n}\n\nfunction transformRowFilterPolicy(policy) {\n  const newPolicy = createBasePolicy(policy);\n  newPolicy.rowFilterPolicyItems = (policy.rowFilterPolicyItems || []).map(item => ({\n    accesses: item.accesses || [],\n    users: transformUsers(item.users || []),\n    groups: item.groups || [],\n    roles: item.roles || [],\n    conditions: item.conditions || [],\n    delegateAdmin: item.delegateAdmin || false,\n    rowFilterInfo: item.rowFilterInfo || {},\n  }));\n  return newPolicy;\n}\n\n// Filter iceberg policies\nconst icebergPolicies = trinoPolicies.filter(p => hasCatalogResource(p) && isIcebergPolicy(p));\n\nconst results = [];\nlet skipped = 0;\n\nfor (const policy of icebergPolicies) {\n  const policyType = policy.policyType || 0;\n  let transformed;\n\n  if (policyType === 0) {\n    transformed = transformAccessPolicy(policy);\n    if (!transformed) { skipped++; continue; }\n  } else if (policyType === 1) {\n    transformed = transformMaskingPolicy(policy);\n  } else if (policyType === 2) {\n    transformed = transformRowFilterPolicy(policy);\n  } else {\n    skipped++;\n    continue;\n  }\n\n  const srName = transformed.name;\n  let action = 'create';\n  let existingId = null;\n\n  if (existingPolicies[srName]) {\n    action = 'update';\n    existingId = existingPolicies[srName].id;\n    transformed.id = existingId;\n  }\n\n  results.push({\n    json: {\n      _action: action,\n      _existingId: existingId,\n      _policyType: policyType,\n      _originalName: policy.name,\n      _transformedName: srName,\n      policy: transformed,\n    }\n  });\n}\n\nif (results.length === 0) {\n  return [{ json: { _noPolicies: true, _skipped: skipped, _total: icebergPolicies.length } }];\n}\n\nreturn results;"
+			},
+			"type": "n8n-nodes-base.code",
+			"typeVersion": 2,
+			"position": [440, 440],
+			"id": "a0000001-0000-0000-0000-000000000013",
+			"name": "Filter & Transform Policies"
+		},
+		{
+			"parameters": {
+				"conditions": {
+					"options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+					"conditions": [
+						{
+							"id": "cond-has-policies",
+							"leftValue": "={{ $json._noPolicies }}",
+							"rightValue": true,
+							"operator": { "type": "boolean", "operation": "notTrue" }
+						}
+					],
+					"combinator": "and"
+				}
+			},
+			"type": "n8n-nodes-base.if",
+			"typeVersion": 2.2,
+			"position": [680, 440],
+			"id": "a0000001-0000-0000-0000-000000000014",
+			"name": "Has Policies?"
+		},
+		{
+			"parameters": {
+				"conditions": {
+					"options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+					"conditions": [
+						{
+							"id": "cond-action",
+							"leftValue": "={{ $json._action }}",
+							"rightValue": "create",
+							"operator": { "type": "string", "operation": "equals" }
+						}
+					],
+					"combinator": "and"
+				}
+			},
+			"type": "n8n-nodes-base.if",
+			"typeVersion": 2.2,
+			"position": [920, 440],
+			"id": "a0000001-0000-0000-0000-000000000015",
+			"name": "Create or Update?"
+		},
+		{
+			"parameters": {
+				"method": "POST",
+				"url": "={{ $('Config').item.json.rangerUrl }}/service/public/v2/api/policy",
+				"authentication": "genericCredentialType",
+				"genericAuthType": "httpBasicAuth",
+				"sendBody": true,
+				"specifyBody": "json",
+				"jsonBody": "={{ JSON.stringify($json.policy) }}",
+				"options": {}
+			},
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [1180, 380],
+			"id": "a0000001-0000-0000-0000-000000000016",
+			"name": "Create Policy",
+			"credentials": {
+				"httpBasicAuth": {
+					"id": "RANGER_BASIC_AUTH",
+					"name": "Ranger Basic Auth"
+				}
+			}
+		},
+		{
+			"parameters": {
+				"method": "PUT",
+				"url": "={{ $('Config').item.json.rangerUrl }}/service/public/v2/api/policy/{{ $json._existingId }}",
+				"authentication": "genericCredentialType",
+				"genericAuthType": "httpBasicAuth",
+				"sendBody": true,
+				"specifyBody": "json",
+				"jsonBody": "={{ JSON.stringify($json.policy) }}",
+				"options": {}
+			},
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [1180, 540],
+			"id": "a0000001-0000-0000-0000-000000000017",
+			"name": "Update Policy",
+			"credentials": {
+				"httpBasicAuth": {
+					"id": "RANGER_BASIC_AUTH",
+					"name": "Ranger Basic Auth"
+				}
+			}
+		},
+		{
+			"parameters": {},
+			"type": "n8n-nodes-base.noOp",
+			"typeVersion": 1,
+			"position": [920, 660],
+			"id": "a0000001-0000-0000-0000-000000000018",
+			"name": "No Policies to Sync"
+		},
+		{
+			"parameters": {},
+			"type": "n8n-nodes-base.noOp",
+			"typeVersion": 1,
+			"position": [620, 200],
+			"id": "a0000001-0000-0000-0000-000000000019",
+			"name": "No Roles to Update"
+		}
+	],
+	"connections": {
+		"Schedule Trigger": {
+			"main": [
+				[
+					{
+						"node": "Config",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Config": {
+			"main": [
+				[
+					{
+						"node": "Fetch Ranger Roles",
+						"type": "main",
+						"index": 0
+					},
+					{
+						"node": "Fetch Trino Policies",
+						"type": "main",
+						"index": 0
+					},
+					{
+						"node": "Fetch StarRocks Policies",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Fetch Ranger Roles": {
+			"main": [
+				[
+					{
+						"node": "Transform Roles",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Transform Roles": {
+			"main": [
+				[
+					{
+						"node": "Has Roles to Update?",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Has Roles to Update?": {
+			"main": [
+				[
+					{
+						"node": "Update Role",
+						"type": "main",
+						"index": 0
+					}
+				],
+				[
+					{
+						"node": "No Roles to Update",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Fetch Trino Policies": {
+			"main": [
+				[
+					{
+						"node": "Merge Policies",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Fetch StarRocks Policies": {
+			"main": [
+				[
+					{
+						"node": "Merge Policies",
+						"type": "main",
+						"index": 1
+					}
+				]
+			]
+		},
+		"Merge Policies": {
+			"main": [
+				[
+					{
+						"node": "Filter & Transform Policies",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Filter & Transform Policies": {
+			"main": [
+				[
+					{
+						"node": "Has Policies?",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Has Policies?": {
+			"main": [
+				[
+					{
+						"node": "Create or Update?",
+						"type": "main",
+						"index": 0
+					}
+				],
+				[
+					{
+						"node": "No Policies to Sync",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Create or Update?": {
+			"main": [
+				[
+					{
+						"node": "Create Policy",
+						"type": "main",
+						"index": 0
+					}
+				],
+				[
+					{
+						"node": "Update Policy",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		}
+	},
+	"settings": {
+		"executionOrder": "v1"
+	},
+	"staticData": null,
+	"meta": {
+		"instanceId": ""
+	},
+	"pinData": {},
+	"versionId": "",
+	"triggerCount": 0,
+	"tags": []
+}
