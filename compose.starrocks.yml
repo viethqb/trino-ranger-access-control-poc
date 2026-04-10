@@ -1,70 +1,27 @@
 services:
-  postgres:
-    image: docker.io/bitnamilegacy/postgresql:16.3.0
-    container_name: postgres
-    environment:
-      - POSTGRESQL_PASSWORD=postgres123AA
+  metabase:
+    image: viet1846/metabase:v1.58.0-SNAPSHOT
+    container_name: metabase
+    hostname: metabase
     volumes:
-      - ranger-postgres:/bitnami/postgresql:rw
+      - /dev/urandom:/dev/random:ro
+    ports:
+      - 3000:3000
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase_db
+      MB_DB_PORT: 5432
+      MB_DB_USER: postgres
+      MB_DB_PASS: postgres123AA
+      MB_DB_HOST: postgres
+      MB_FORCE_SELF_HOSTED: true
     networks:
       - ranger
-  starrocks-fe-0:
-    image: viet1846/starrocks-fe-ubuntu:4.0-latest
-    build:
-      context: .
-      dockerfile: ./starrocks/Dockerfile.fe
-    hostname: starrocks-fe-0
-    container_name: starrocks-fe-0
-    command:
-      - /bin/bash
-      - -c
-      - |
-        /opt/starrocks/fe_entrypoint.sh starrocks-fe-0
-    environment:
-      - HOST_TYPE=FQDN
-      - TZ=Asia/Shanghai
-    ports:
-      - "8030:8030"
-      - "9020:9020"
-      - "9030:9030"
-    volumes:
-      - singleton_fe0_data:/opt/starrocks/fe/meta
-      - ./starrocks/conf/fe.conf:/opt/starrocks/fe/conf/fe.conf
-      - ./starrocks/conf/ranger-starrocks-security.xml:/opt/starrocks/fe/conf/ranger-starrocks-security.xml
-      - ./starrocks/conf/ranger-policymgr-ssl.xml:/opt/starrocks/fe/conf/ranger-policymgr-ssl.xml
-      - ./starrocks/conf/ranger-starrocks-audit.xml:/opt/starrocks/fe/conf/ranger-starrocks-audit.xml
-    depends_on:
-      - ranger
-      - rest
-      - minio
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8030/api/health"]
-      interval: 5s
+      test: curl --fail -I http://localhost:3000/api/health || exit 1
+      interval: 15s
       timeout: 5s
-      retries: 30
-    networks:
-      - ranger
-
-  starrocks-be-0:
-    image: starrocks/be-ubuntu:4.0-latest
-    hostname: starrocks-be-0
-    container_name: starrocks-be-0
-    command:
-      - /bin/bash
-      - -c
-      - |
-        /opt/starrocks/be_entrypoint.sh starrocks-fe-0
-    environment:
-      - HOST_TYPE=FQDN
-      - TZ=Asia/Shanghai
-    ports:
-      - "8040:8040"
-    depends_on:
-      - starrocks-fe-0
-    volumes:
-      - singleton_be0_data:/opt/starrocks/be/storage
-    networks:
-      - ranger
+      retries: 5
   opensearch:
     image: opensearchproject/opensearch:${OPENSEARCH_VERSION:-2.15.0}
     container_name: opensearch
@@ -125,7 +82,6 @@ services:
       - CATALOG_WAREHOUSE=s3://warehouse/
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - CATALOG_S3_ENDPOINT=http://minio:9000
-      - CATALOG_S3_PATH__STYLE__ACCESS=true
   minio:
     image: minio/minio
     container_name: minio
@@ -158,6 +114,7 @@ services:
       /usr/bin/mc policy set public minio/warehouse;
       tail -f /dev/null
       "
+
 volumes:
   ranger-postgres:
   # ranger-elasticsearch:

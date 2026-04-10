@@ -42,7 +42,7 @@
 
     <property>
         <name>ranger.plugin.starrocks.policy.rest.ssl.config.file</name>
-        <value>/etc/hadoop/conf/ranger-policymgr-ssl.xml</value>
+        <value>/opt/starrocks/fe/conf/ranger-policymgr-ssl.xml</value>
         <description>
             Path to the file containing SSL details to contact Ranger Admin
         </description>

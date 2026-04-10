@@ -183,7 +183,7 @@
     </property>
     <property>
         <name>xasecure.audit.destination.opensearch.urls</name>
-        <value>opensearch</value>
+        <value>opensearch:9200</value>
     </property>
     <property>
         <name>xasecure.audit.destination.opensearch.user</name>

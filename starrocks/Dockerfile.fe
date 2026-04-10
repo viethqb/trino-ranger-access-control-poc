@@ -1,7 +1,7 @@
-# FROM starrocks/fe-ubuntu:3.5-latest
 FROM starrocks/fe-ubuntu:4.0-latest
 
 RUN rm /opt/starrocks/fe/lib/ranger-plugins-common-2.5.0.jar
 RUN rm /opt/starrocks/fe/lib/ranger-plugins-audit-2.5.0.jar
 
 COPY ./trino/dist/*.jar /opt/starrocks/fe/lib/
+COPY ./starrocks/auditloader /opt/starrocks/fe/plugin/auditloader
