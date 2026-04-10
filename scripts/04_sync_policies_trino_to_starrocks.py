@@ -303,12 +303,22 @@ def create_base_policy(source_policy):
         "description": f"Synced from Trino policy: {source_policy['name']} (id={source_policy.get('id')})",
     }
 
-    # Map additionalResources if present
+    # Map additionalResources if present, filtering out invalid StarRocks resource sets
+    VALID_SR_KEYS = {
+        "catalog", "database", "table", "column", "view", "function",
+        "materialized_view", "global_function", "system", "resource",
+        "user", "resource_group", "storage_volume",
+    }
     additional = source_policy.get("additionalResources", [])
     if additional:
-        base["additionalResources"] = [
-            map_resources_trino_to_starrocks(res) for res in additional
-        ]
+        mapped = []
+        for res in additional:
+            mapped_res = map_resources_trino_to_starrocks(res)
+            # Skip if any resource key is not valid in StarRocks (e.g. trinouser)
+            if all(k in VALID_SR_KEYS for k in mapped_res):
+                mapped.append(mapped_res)
+        if mapped:
+            base["additionalResources"] = mapped
 
     return base
 
