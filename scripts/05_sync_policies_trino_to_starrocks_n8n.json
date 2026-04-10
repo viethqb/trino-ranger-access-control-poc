@@ -90,13 +90,13 @@
 		{
 			"parameters": {
 				"conditions": {
-					"options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+					"options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
 					"conditions": [
 						{
 							"id": "cond-role",
-							"leftValue": "={{ $json._noRolesToUpdate }}",
-							"rightValue": true,
-							"operator": { "type": "boolean", "operation": "notTrue" }
+							"leftValue": "={{ $json._roleId }}",
+							"rightValue": "",
+							"operator": { "type": "string", "operation": "exists" }
 						}
 					],
 					"combinator": "and"
@@ -196,13 +196,13 @@
 		{
 			"parameters": {
 				"conditions": {
-					"options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+					"options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
 					"conditions": [
 						{
 							"id": "cond-has-policies",
-							"leftValue": "={{ $json._noPolicies }}",
-							"rightValue": true,
-							"operator": { "type": "boolean", "operation": "notTrue" }
+							"leftValue": "={{ $json._action }}",
+							"rightValue": "",
+							"operator": { "type": "string", "operation": "exists" }
 						}
 					],
 					"combinator": "and"
