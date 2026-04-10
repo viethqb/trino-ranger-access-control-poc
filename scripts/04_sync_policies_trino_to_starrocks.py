@@ -141,14 +141,18 @@ def sync_roles(base_url, user, password):
     return synced
 
 
-def is_iceberg_policy(policy):
-    """Check if policy is related to iceberg catalog."""
-    resources = policy.get("resources", {})
+def _has_iceberg_catalog(resources):
+    """Check if a resource set references the iceberg catalog."""
     catalog_res = resources.get("catalog", {})
-    values = catalog_res.get("values", [])
-    # Only match explicit 'iceberg' catalog, not wildcard '*'
-    for v in values:
-        if v.lower() == "iceberg":
+    return any(v.lower() == "iceberg" for v in catalog_res.get("values", []))
+
+
+def is_iceberg_policy(policy):
+    """Check if policy is related to iceberg catalog (primary or additional resources)."""
+    if _has_iceberg_catalog(policy.get("resources", {})):
+        return True
+    for additional in policy.get("additionalResources", []):
+        if _has_iceberg_catalog(additional):
             return True
     return False
 
@@ -289,7 +293,7 @@ def create_base_policy(source_policy):
     # Prefix name to avoid collisions with existing StarRocks policies
     name = f"sync-trino: {source_policy['name']}"
 
-    return {
+    base = {
         "service": "",  # Will be set later
         "name": name,
         "policyType": source_policy.get("policyType", 0),
@@ -298,6 +302,15 @@ def create_base_policy(source_policy):
         "resources": map_resources_trino_to_starrocks(source_policy.get("resources", {})),
         "description": f"Synced from Trino policy: {source_policy['name']} (id={source_policy.get('id')})",
     }
+
+    # Map additionalResources if present
+    additional = source_policy.get("additionalResources", [])
+    if additional:
+        base["additionalResources"] = [
+            map_resources_trino_to_starrocks(res) for res in additional
+        ]
+
+    return base
 
 
 def sync_policies(
